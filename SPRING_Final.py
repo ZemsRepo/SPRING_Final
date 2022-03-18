@@ -43,9 +43,13 @@ def _updateStwm(querySequence,stwmD,stwmI,sampling,current_value):
 
     return D, I
 
+
+
 class Signal():
     matchedSequenceCandidateArray = []
+    matchedSequenceCandidateArrayTime = []
     matchedSequence = []
+    matchedSequenceTime = []
     stwmDCandidateArray = []
     dtwDistanceSequence = []
 
@@ -55,17 +59,23 @@ class Signal():
             self.querySequence = signal.savgol_filter(signal.resample(self.querySequence,100),2,1)
         self.fullSequence = np.loadtxt(fullSequencePath)
         self.querySequenceLength = len(self.querySequence)
-        self.presentSequenceLength = self.querySequenceLength*15
+        self.presentSequenceLength = self.querySequenceLength*20
         self.presentSequence = np.zeros(self.presentSequenceLength)
+        self.presentSequenceTime = np.zeros(self.presentSequenceLength)
         self.stwmD = np.zeros([self.querySequenceLength,self.presentSequenceLength]);self.stwmD[:,0] = np.inf
         self.stwmI = np.zeros([self.querySequenceLength,self.presentSequenceLength])
         self.threshold = threshold
 
+
     def updateSequence(self):
         global N
-        self.st = self.fullSequence[N]
+        self.st = self.fullSequence[N][1]
         self.presentSequence[1:] = self.presentSequence[:-1]
         self.presentSequence[0] = self.st
+
+        self.stTime = self.fullSequence[N][0]
+        self.presentSequenceTime[1:] = self.presentSequenceTime[:-1]
+        self.presentSequenceTime[0] = self.stTime
 
     def updateStwm(self):
         global N
@@ -76,28 +86,43 @@ class Signal():
         D = self.stwmD
         I = self.stwmI
 
+        # Start append candidate sequences
         if D[-1, 0] <= self.threshold:
             if D[-1, 1] > self.threshold:
                 self.stwmDCandidateArray = []
                 self.matchedSequenceCandidateArray = []
+                self.matchedSequenceCandidateArrayTime = []
             self.stwmDCandidateArray.append(D[-1, 0])
-            self.matchedSequence_cand = self.presentSequence[0:int(N - I[-1, 0]) + 1]
-            self.matchedSequenceCandidateArray.append(copy.copy(self.matchedSequence_cand))
+            self.matchedSequenceCandidate = self.presentSequence[0:int(N - I[-1, 0]) + 1]
+            self.matchedSequenceCandidateTime = self.presentSequenceTime[0:int(N - I[-1, 0]) + 1]
+            self.matchedSequenceCandidateArray.append(copy.copy(self.matchedSequenceCandidate))
+            self.matchedSequenceCandidateArrayTime.append(copy.copy(self.matchedSequenceCandidateTime))
+
 
         if D[-1, 0] > self.threshold:
+            # end append candidate sequences
             if D[-1, 1] <= self.threshold:
                 self.stwmDCandidateArray = self.stwmDCandidateArray[::-1]
-                local_min_index = len(self.stwmDCandidateArray) - 1 - self.stwmDCandidateArray.index(min(self.stwmDCandidateArray[::-1]))
+                # local_min_index = len(self.stwmDCandidateArray) - 1 - self.stwmDCandidateArray.index(min(self.stwmDCandidateArray[::-1]))
+                local_min_index = self.stwmDCandidateArray.index(min(self.stwmDCandidateArray))
                 self.matchedSequence = self.matchedSequenceCandidateArray[local_min_index]
+                self.matchedSequenceTime = self.matchedSequenceCandidateArrayTime[local_min_index]
                 self.stwmDCandidateArray = []
                 self.matchedSequenceCandidateArray = []
+                self.matchedSequenceCandidateArrayTime = []
+            # set
             if D[-1, 1] > self.threshold:
                 self.stwmDCandidateArray = []
                 self.matchedSequenceCandidateArray = []
+                self.matchedSequenceCandidateArrayTime = []
 
     def setPlot1(self,title = None,pen = "white"):
+
+        self.tempData = []
+        self.tempDataTime = []
         self.p1 = win.addPlot(title=title)
         self.curve1 = self.p1.plot(pen = pen)
+
 
     def setPlot2(self,title = None,pen = "white"):
         self.p2 = win.addPlot(title=title)
@@ -105,11 +130,16 @@ class Signal():
 
     def updatePlot1(self):
         global N
-        self.curve1.setData(self.presentSequence[::-1])
-        self.curve1.setPos(N,0)
+        if N < self.presentSequenceLength:
+            self.tempDataTime.append(self.stTime)
+            self.tempData.append(self.st)
+            self.curve1.setData(x = self.tempDataTime, y = self.tempData, downsample = 2)
+        else:
+            self.curve1.setData(x = self.presentSequenceTime[::-1], y = self.presentSequence[::-1], downsample = 2)
+
 
     def updatePlot2(self):
-        self.curve2.setData(self.matchedSequence[::-1])
+        self.curve2.setData(x = self.matchedSequenceTime[::-1], y = self.matchedSequence[::-1])
 
     def updateData(self):
         self.updateSequence()
@@ -128,26 +158,33 @@ class Metric():
         self.st = signal1.st * signal2.st
         self.presentSequence[1:] = self.presentSequence[:-1]
         self.presentSequence[0] = self.st
+        self.presentSequenceTime = signal1.presentSequenceTime
+        self.stTime = self.presentSequenceTime[0]
 
 
     def setPlot1(self,title = None,pen = "white"):
+        self.tempData = []
+        self.tempDataTime = []
         self.p1 = win.addPlot(title=title)
-        self.curve1 = self.p1.plot(self.presentSequence[::-1], pen=pen)
+        self.curve1 = self.p1.plot(pen = pen)
 
     def updatePlot1(self):
         global N
-        self.curve1.setData(self.presentSequence[::-1])
-        self.curve1.setPos(N,0)
+        global N
+        if N < self.presentSequenceLength:
+            self.tempDataTime.append(self.stTime)
+            self.tempData.append(self.st)
+            self.curve1.setData(x=self.tempDataTime, y=self.tempData, downsample=2)
+        else:
+            self.curve1.setData(x=self.presentSequenceTime[::-1], y=self.presentSequence[::-1], downsample=2)
 
 
 
 
-
-
-currentWithCmt = Signal(fullSequencePath="V2BCurrent_Segment.csv", querySequencePath="V2BCurrent_CMT.csv", threshold= 10000)
-CurrentWithPuls = Signal(fullSequencePath="V2BCurrent_Segment.csv", querySequencePath="V2BCurrent_Puls.csv", threshold= 10000)
-voltageWithZuendfehler = Signal(fullSequencePath="V2BVoltage_Segment.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", threshold= 600)
-voltageWithSpritzer = Signal(fullSequencePath="V2BVoltage_Segment.csv", querySequencePath="V2BVoltage_Spritzer5.csv", threshold= 200)
+currentWithCmt = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_CMT.csv", threshold= 10000)
+CurrentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", threshold= 10000)
+voltageWithZuendfehler = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", threshold= 600)
+voltageWithSpritzer = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Spritzer5.csv", threshold= 200)
 power = Metric(currentWithCmt,voltageWithZuendfehler)
 
 
@@ -155,6 +192,7 @@ app = pg.mkQApp("Spring Dashboard")
 win = pg.GraphicsLayoutWidget(show=True)
 win.setWindowTitle("Spring basic Dashboard")
 win.resize(1000,600)
+pg.setConfigOptions(antialias=True)
 
 currentWithCmt.setPlot1("Strom Datastream",pen=(217,83,25))
 currentWithCmt.setPlot2("CMT")
