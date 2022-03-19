@@ -3,6 +3,8 @@ import copy
 
 import numpy as np
 from scipy import signal
+from scipy import integrate
+
 import heapq as hq
 from numba import cuda,jit
 
@@ -53,13 +55,14 @@ class Signal():
     stwmDCandidateArray = []
     dtwDistanceSequence = []
 
-    def __init__(self, fullSequencePath = None, querySequencePath = None,threshold = 1):
+
+    def __init__(self, fullSequencePath = None, querySequencePath = None,downsample = 1,threshold = 1):
         self.querySequence = np.loadtxt(querySequencePath)
         if len(self.querySequence)>100:
             self.querySequence = signal.savgol_filter(signal.resample(self.querySequence,100),2,1)
-        self.fullSequence = np.loadtxt(fullSequencePath)
+        self.fullSequence = np.loadtxt(fullSequencePath)[::downsample]
         self.querySequenceLength = len(self.querySequence)
-        self.presentSequenceLength = self.querySequenceLength*20
+        self.presentSequenceLength = self.querySequenceLength*7
         self.presentSequence = np.zeros(self.presentSequenceLength)
         self.presentSequenceTime = np.zeros(self.presentSequenceLength)
         self.stwmD = np.zeros([self.querySequenceLength,self.presentSequenceLength]);self.stwmD[:,0] = np.inf
@@ -77,9 +80,11 @@ class Signal():
         self.presentSequenceTime[1:] = self.presentSequenceTime[:-1]
         self.presentSequenceTime[0] = self.stTime
 
+
     def updateStwm(self):
         global N
         self.stwmD,self.stwmI = _updateStwm(self.querySequence,self.stwmD,self.stwmI,N,self.st)
+
 
     def getMatchedSequence(self):
         global N
@@ -116,6 +121,7 @@ class Signal():
                 self.matchedSequenceCandidateArray = []
                 self.matchedSequenceCandidateArrayTime = []
 
+
     def setPlot1(self,title = None,pen = "white"):
 
         self.tempData = []
@@ -128,18 +134,20 @@ class Signal():
         self.p2 = win.addPlot(title=title)
         self.curve2 = self.p2.plot(pen = pen)
 
+
     def updatePlot1(self):
         global N
         if N < self.presentSequenceLength:
             self.tempDataTime.append(self.stTime)
             self.tempData.append(self.st)
-            self.curve1.setData(x = self.tempDataTime, y = self.tempData, downsample = 2)
+            self.curve1.setData(x = self.tempDataTime, y = self.tempData)
         else:
-            self.curve1.setData(x = self.presentSequenceTime[::-1], y = self.presentSequence[::-1], downsample = 2)
+            self.curve1.setData(x = self.presentSequenceTime[::-1], downsample=2, y = self.presentSequence[::-1])
 
 
     def updatePlot2(self):
         self.curve2.setData(x = self.matchedSequenceTime[::-1], y = self.matchedSequence[::-1])
+
 
     def updateData(self):
         self.updateSequence()
@@ -147,19 +155,38 @@ class Signal():
         self.getMatchedSequence()
 
 
-class Metric():
+class Power():
 
     def __init__(self,signal1,signal2):
         self.presentSequenceLength = len(signal1.presentSequence)
         self.presentSequence = np.zeros(self.presentSequenceLength)
+        self.presentSequenceEnergy = np.zeros(self.presentSequenceLength)
+        self.presentSequenceEnergySum = np.zeros(self.presentSequenceLength)
 
 
     def updateSequence(self,signal1,signal2):
+        global N
         self.st = signal1.st * signal2.st
         self.presentSequence[1:] = self.presentSequence[:-1]
         self.presentSequence[0] = self.st
         self.presentSequenceTime = signal1.presentSequenceTime
         self.stTime = self.presentSequenceTime[0]
+
+
+    def calculateEnergy(self):
+        global N
+        if N == 0:
+            self.stEnergy = 0
+            self.stEnergySum = self.stEnergy
+        else:
+            self.stEnergy = integrate.trapz(self.presentSequence[:2][::-1], self.presentSequenceTime[:2][::-1])
+            self.stEnergySum = self.stEnergySum + self.stEnergy
+
+        self.presentSequenceEnergySum[1:] = self.presentSequenceEnergySum[:-1]
+        self.presentSequenceEnergySum[0] = self.stEnergySum
+
+        self.presentSequenceEnergy[1:] = self.presentSequenceEnergy[:-1]
+        self.presentSequenceEnergy[0] = self.stEnergy
 
 
     def setPlot1(self,title = None,pen = "white"):
@@ -168,24 +195,52 @@ class Metric():
         self.p1 = win.addPlot(title=title)
         self.curve1 = self.p1.plot(pen = pen)
 
+
+    def setPlot2(self, title=None, pen="white"):
+        self.tempData2 = []
+        self.p2 = win.addPlot(title=title)
+        self.curve2 = self.p2.plot(pen=pen)
+
+
+    def setPlot3(self, title=None, pen="white"):
+        self.tempData3 = []
+        self.p3 = win.addPlot(title=title)
+        self.curve3 = self.p3.plot(pen=pen)
+
+
     def updatePlot1(self):
-        global N
         global N
         if N < self.presentSequenceLength:
             self.tempDataTime.append(self.stTime)
             self.tempData.append(self.st)
-            self.curve1.setData(x=self.tempDataTime, y=self.tempData, downsample=2)
+            self.curve1.setData(x=self.tempDataTime, y=self.tempData)
         else:
             self.curve1.setData(x=self.presentSequenceTime[::-1], y=self.presentSequence[::-1], downsample=2)
 
 
+    def updatePlot2(self):
+        if N < self.presentSequenceLength:
+            self.tempData2.append(self.stEnergy)
+            self.curve2.setData(x = self.tempDataTime, y = self.tempData2)
+        else:
+            self.curve2.setData(x = self.presentSequenceTime[::-1], y = self.presentSequenceEnergy[::-1],downsample=2)
 
 
-currentWithCmt = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_CMT.csv", threshold= 10000)
-CurrentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", threshold= 10000)
-voltageWithZuendfehler = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", threshold= 600)
-voltageWithSpritzer = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Spritzer5.csv", threshold= 200)
-power = Metric(currentWithCmt,voltageWithZuendfehler)
+    def updatePlot3(self):
+        if N < self.presentSequenceLength:
+            self.tempData3.append(self.stEnergySum)
+            self.curve3.setData(x = self.tempDataTime, y = self.tempData3)
+        else:
+            self.curve3.setData(x = self.presentSequenceTime[::-1], y = self.presentSequenceEnergySum[::-1],downsample=2)
+
+
+
+
+currentWithCmt = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_CMT.csv", downsample=3, threshold= 10000)
+CurrentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", downsample=3, threshold= 10000)
+voltageWithZuendfehler = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", downsample=3, threshold= 600)
+voltageWithSpritzer = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Spritzer5.csv", downsample=3, threshold= 200)
+power = Power(currentWithCmt,voltageWithZuendfehler)
 
 
 app = pg.mkQApp("Spring Dashboard")
@@ -207,6 +262,7 @@ voltageWithSpritzer.setPlot2("Spritzer")
 win.nextRow()
 
 power.setPlot1("Leistung Datastream",pen=(126,47,142))
+power.setPlot3("Energie",pen=(126,47,142))
 
 qGraphicsGridLayout = win.ci.layout
 qGraphicsGridLayout.setColumnStretchFactor(0,2)
@@ -220,6 +276,8 @@ def updateData():
     voltageWithZuendfehler.updateData()
     voltageWithSpritzer.updateData()
     power.updateSequence(currentWithCmt,voltageWithZuendfehler)
+    power.calculateEnergy()
+
 
     currentWithCmt.updatePlot1()
     currentWithCmt.updatePlot2()
@@ -230,6 +288,7 @@ def updateData():
     voltageWithSpritzer.updatePlot2()
 
     power.updatePlot1()
+    power.updatePlot3()
 
     N+=1
 
