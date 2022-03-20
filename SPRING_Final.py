@@ -8,7 +8,6 @@ from scipy import integrate
 import heapq as hq
 from numba import cuda,jit
 
-
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 from time import perf_counter
@@ -17,6 +16,7 @@ from time import perf_counter
 @jit(nopython=True)
 def dist_func(x, y):
     return (x - y)**2
+
 
 @jit(nopython=True)
 def _updateStwm(querySequence,stwmD,stwmI,sampling,current_value):
@@ -46,7 +46,6 @@ def _updateStwm(querySequence,stwmD,stwmI,sampling,current_value):
     return D, I
 
 
-
 class Signal():
     matchedSequenceCandidateArray = []
     matchedSequenceCandidateArrayTime = []
@@ -54,6 +53,14 @@ class Signal():
     matchedSequenceTime = []
     stwmDCandidateArray = []
     dtwDistanceSequence = []
+    adjacentSequence = []
+    adjacentSequenceTime = []
+    adjacentSequenceTime2 = []
+    count = 0
+    countSingleSequence = 0
+    localMaximum=None
+    localMinimun=None
+    frequence = None
 
 
     def __init__(self, fullSequencePath = None, querySequencePath = None,downsample = 1,threshold = 1):
@@ -62,7 +69,7 @@ class Signal():
             self.querySequence = signal.savgol_filter(signal.resample(self.querySequence,100),2,1)
         self.fullSequence = np.loadtxt(fullSequencePath)[::downsample]
         self.querySequenceLength = len(self.querySequence)
-        self.presentSequenceLength = self.querySequenceLength*7
+        self.presentSequenceLength = self.querySequenceLength*10
         self.presentSequence = np.zeros(self.presentSequenceLength)
         self.presentSequenceTime = np.zeros(self.presentSequenceLength)
         self.stwmD = np.zeros([self.querySequenceLength,self.presentSequenceLength]);self.stwmD[:,0] = np.inf
@@ -109,17 +116,40 @@ class Signal():
             if D[-1, 1] <= self.threshold:
                 self.stwmDCandidateArray = self.stwmDCandidateArray[::-1]
                 # local_min_index = len(self.stwmDCandidateArray) - 1 - self.stwmDCandidateArray.index(min(self.stwmDCandidateArray[::-1]))
-                local_min_index = self.stwmDCandidateArray.index(min(self.stwmDCandidateArray))
-                self.matchedSequence = self.matchedSequenceCandidateArray[local_min_index]
-                self.matchedSequenceTime = self.matchedSequenceCandidateArrayTime[local_min_index]
+                localMinIndex = self.stwmDCandidateArray.index(min(self.stwmDCandidateArray))
+                self.matchedSequence = self.matchedSequenceCandidateArray[localMinIndex]
+                self.matchedSequenceTime = self.matchedSequenceCandidateArrayTime[localMinIndex]
+
+                self.count += 1
+                self.localMinimun = min(self.matchedSequence)
+                self.localMaximum = max(self.matchedSequence)
+                self.frequence = self.matchedSequence[0] - self.matchedSequence[-1]
+
                 self.stwmDCandidateArray = []
                 self.matchedSequenceCandidateArray = []
                 self.matchedSequenceCandidateArrayTime = []
-            # set
+
+
+                self.adjacentSequenceTime2.append(copy.copy(list(self.matchedSequenceTime[::-1])))
+                index1 = int(np.argwhere(self.presentSequenceTime == self.adjacentSequenceTime2[-1][-1]))
+                index2 = int(np.argwhere(self.presentSequenceTime == self.adjacentSequenceTime2[0][0]))+1
+                self.adjacentSequence = copy.copy(self.presentSequence[index1:index2][::-1])
+                self.adjacentSequenceTime =copy.copy(self.presentSequenceTime[index1:index2][::-1])
+                self.countSingleSequence += 1
+
+
             if D[-1, 1] > self.threshold:
                 self.stwmDCandidateArray = []
                 self.matchedSequenceCandidateArray = []
                 self.matchedSequenceCandidateArrayTime = []
+
+                if len(self.matchedSequenceTime) != 0:
+                    if self.stTime > (self.matchedSequenceTime[0]+2*(self.matchedSequenceTime[0]-self.matchedSequenceTime[-1])):
+                        self.adjacentSequence = []
+                        self.adjacentSequenceTime = []
+                        self.adjacentSequenceTime2 = []
+                        self.countSingleSequence = 0
+
 
 
     def setPlot1(self,title = None,pen = "white"):
@@ -134,6 +164,10 @@ class Signal():
         self.p2 = win.addPlot(title=title)
         self.curve2 = self.p2.plot(pen = pen)
 
+    def setPlot3(self, title=None, pen="white"):
+        self.p3 = win.addPlot(title=title)
+        self.curve3 = self.p3.plot(pen=pen)
+
 
     def updatePlot1(self):
         global N
@@ -147,6 +181,9 @@ class Signal():
 
     def updatePlot2(self):
         self.curve2.setData(x = self.matchedSequenceTime[::-1], y = self.matchedSequence[::-1])
+
+    def updatePlot3(self):
+        self.curve3.setData(x = self.adjacentSequenceTime, y = self.adjacentSequence)
 
 
     def updateData(self):
@@ -236,10 +273,10 @@ class Power():
 
 
 
-currentWithCmt = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_CMT.csv", downsample=3, threshold= 10000)
-CurrentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", downsample=3, threshold= 10000)
-voltageWithZuendfehler = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", downsample=3, threshold= 600)
-voltageWithSpritzer = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Spritzer5.csv", downsample=3, threshold= 200)
+currentWithCmt = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_CMT.csv", downsample=2, threshold= 10000)
+CurrentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", downsample=2, threshold= 10000)
+voltageWithZuendfehler = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", downsample=2, threshold= 600)
+voltageWithSpritzer = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Spritzer5.csv", downsample=2, threshold= 200)
 power = Power(currentWithCmt,voltageWithZuendfehler)
 
 
@@ -251,7 +288,8 @@ pg.setConfigOptions(antialias=True)
 
 currentWithCmt.setPlot1("Strom Datastream",pen=(217,83,25))
 currentWithCmt.setPlot2("CMT")
-CurrentWithPuls.setPlot2("Puls")
+CurrentWithPuls.setPlot2("Puls(Single)")
+CurrentWithPuls.setPlot3("Puls-Phase")
 
 win.nextRow()
 
@@ -265,7 +303,7 @@ power.setPlot1("Leistung Datastream",pen=(126,47,142))
 power.setPlot3("Energie",pen=(126,47,142))
 
 qGraphicsGridLayout = win.ci.layout
-qGraphicsGridLayout.setColumnStretchFactor(0,2)
+qGraphicsGridLayout.setColumnStretchFactor(0,1)
 
 
 
@@ -282,6 +320,7 @@ def updateData():
     currentWithCmt.updatePlot1()
     currentWithCmt.updatePlot2()
     CurrentWithPuls.updatePlot2()
+    CurrentWithPuls.updatePlot3()
 
     voltageWithZuendfehler.updatePlot1()
     voltageWithZuendfehler.updatePlot2()
