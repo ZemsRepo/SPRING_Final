@@ -65,7 +65,7 @@ class Signal():
     frequence = None
 
 
-    def __init__(self, fullSequencePath = None, querySequencePath = None,downsample = 1,threshold = 1):
+    def __init__(self, fullSequencePath = None, querySequencePath = None, downsample = 1,threshold = 1):
         self.querySequence = np.loadtxt(querySequencePath)
         if len(self.querySequence)>100:
             self.querySequence = signal.savgol_filter(signal.resample(self.querySequence,100),2,1)
@@ -125,7 +125,7 @@ class Signal():
                 self.count += 1
                 self.localMinimun = min(self.matchedSequence)
                 self.localMaximum = max(self.matchedSequence)
-                self.frequence = self.matchedSequence[0] - self.matchedSequence[-1]
+                self.frequence = 1/(self.matchedSequenceTime[0] - self.matchedSequenceTime[-1])
 
                 self.stwmDCandidateArray = []
                 self.matchedSequenceCandidateArray = []
@@ -276,8 +276,30 @@ class Power():
         else:
             self.curve3.setData(x = self.presentSequenceTime[::-1], y = self.presentSequenceEnergySum[::-1])
 
+cmtAndPulseSequence = []
+cmtAndPulseSequenceTime = []
+globalFrequenz = 0
+
+def getCmtAndPluse(cmt,pulse):
+    global cmtAndPulseSequence, cmtAndPulseSequenceTime, globalFrequenz
+    if len(cmt.matchedSequence) != 0:
+        if len(pulse.adjacentSequence) != 0 and len(pulse.adjacentSequence2) == 0:
+            if abs(cmt.matchedSequenceTime[0]-pulse.adjacentSequenceTime[0]) < 1/pulse.frequence:
+                cmtAndPulseSequence = np.hstack((cmt.matchedSequence[::-1],pulse.adjacentSequence))
+                cmtAndPulseSequenceTime = np.hstack((cmt.matchedSequenceTime[::-1],pulse.adjacentSequenceTime))
+                globalFrequenz = 1/(cmtAndPulseSequenceTime[-1] - cmtAndPulseSequenceTime[0])
 
 
+
+def setPlot1(title = None,pen = "white"):
+    global p1, curve1
+    p1 = win.addPlot(title=title)
+    curve1 = p1.plot(pen = pen)
+
+
+def updatePlot1():
+    global curve1
+    curve1.setData(x = cmtAndPulseSequenceTime , y = cmtAndPulseSequence)
 
 currentWithCmt = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_CMT.csv", downsample=2, threshold= 10000)
 CurrentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", downsample=2, threshold= 12000)
@@ -289,13 +311,14 @@ power = Power(currentWithCmt,voltageWithZuendfehler)
 app = pg.mkQApp("Spring Dashboard")
 win = pg.GraphicsLayoutWidget(show=True)
 win.setWindowTitle("Spring basic Dashboard")
-win.resize(1000,600)
+win.resize(1200,600)
 
 
 currentWithCmt.setPlot1("Strom Datastream",pen=(217,83,25))
 currentWithCmt.setPlot2("CMT")
 CurrentWithPuls.setPlot2("Puls(Single)")
 CurrentWithPuls.setPlot3("Puls-Phase")
+setPlot1("CMT+Pulse")
 
 win.nextRow()
 
@@ -309,7 +332,7 @@ power.setPlot1("Leistung Datastream",pen=(126,47,142))
 power.setPlot3("Energie",pen=(126,47,142))
 
 qGraphicsGridLayout = win.ci.layout
-qGraphicsGridLayout.setColumnStretchFactor(0,1)
+qGraphicsGridLayout.setColumnStretchFactor(0,3)
 
 
 
@@ -321,13 +344,17 @@ def updateData():
     voltageWithSpritzer.updateData()
     power.updateSequence(currentWithCmt,voltageWithZuendfehler)
     power.calculateEnergy()
+    getCmtAndPluse(currentWithCmt,CurrentWithPuls)
 
-    if N % 10 == 0:
+
+
+    if N % 15 == 0:
 
         currentWithCmt.updatePlot1()
         currentWithCmt.updatePlot2()
         CurrentWithPuls.updatePlot2()
         CurrentWithPuls.updatePlot3()
+        updatePlot1()
 
         voltageWithZuendfehler.updatePlot1()
         voltageWithZuendfehler.updatePlot2()
