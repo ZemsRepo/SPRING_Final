@@ -68,10 +68,12 @@ class Signal():
     def __init__(self, fullSequencePath = None, querySequencePath = None, downsample = 1,threshold = 1):
         self.querySequence = np.loadtxt(querySequencePath)
         if len(self.querySequence)>100:
-            self.querySequence = signal.savgol_filter(signal.resample(self.querySequence,100),2,1)
+            self.querySequence = signal.savgol_filter(signal.resample(self.querySequence,int(100/downsample)),2,1)
+        else:
+            self.querySequence = signal.savgol_filter(signal.resample(self.querySequence,int(len(self.querySequence)/downsample)),2,1)
         self.fullSequence = np.loadtxt(fullSequencePath)[::downsample]
         self.querySequenceLength = len(self.querySequence)
-        self.presentSequenceLength = self.querySequenceLength*10
+        self.presentSequenceLength = int(2000/downsample)
         self.presentSequence = np.zeros(self.presentSequenceLength)
         self.presentSequenceTime = np.zeros(self.presentSequenceLength)
         self.stwmD = np.zeros([self.querySequenceLength,self.presentSequenceLength]);self.stwmD[:,0] = np.inf
@@ -95,7 +97,7 @@ class Signal():
         self.stwmD,self.stwmI = _updateStwm(self.querySequence,self.stwmD,self.stwmI,N,self.st)
 
 
-    def getMatchedSequence(self, getAdjacentSequence = False):
+    def getMatchedSequence(self, getAdjacentSequence = False, findSpritzermode = False):
         global N
         D = self.stwmD
         I = self.stwmI
@@ -116,20 +118,40 @@ class Signal():
         if D[-1, 0] > self.threshold:
             # end append candidate sequences
             if D[-1, 1] <= self.threshold:
-                self.stwmDCandidateArray = self.stwmDCandidateArray[::-1]
-                # local_min_index = len(self.stwmDCandidateArray) - 1 - self.stwmDCandidateArray.index(min(self.stwmDCandidateArray[::-1]))
-                localMinIndex = self.stwmDCandidateArray.index(min(self.stwmDCandidateArray))
-                self.matchedSequence = self.matchedSequenceCandidateArray[localMinIndex]
-                self.matchedSequenceTime = self.matchedSequenceCandidateArrayTime[localMinIndex]
+                if findSpritzermode == True:
+                    self.stwmDCandidateArray = self.stwmDCandidateArray[::-1]
+                    # local_min_index = len(self.stwmDCandidateArray) - 1 - self.stwmDCandidateArray.index(min(self.stwmDCandidateArray[::-1]))
+                    localMinIndex = self.stwmDCandidateArray.index(min(self.stwmDCandidateArray))
 
-                self.count += 1
-                self.localMinimun = min(self.matchedSequence)
-                self.localMaximum = max(self.matchedSequence)
-                self.frequence = 1/(self.matchedSequenceTime[0] - self.matchedSequenceTime[-1])
+                    if len(self.matchedSequenceCandidateArray[localMinIndex]) < 2.5*self.querySequenceLength:
+                        self.matchedSequence = self.matchedSequenceCandidateArray[localMinIndex]
+                        self.matchedSequenceTime = self.matchedSequenceCandidateArrayTime[localMinIndex]
 
-                self.stwmDCandidateArray = []
-                self.matchedSequenceCandidateArray = []
-                self.matchedSequenceCandidateArrayTime = []
+                        self.count += 1
+                        self.localMinimun = min(self.matchedSequence)
+                        self.localMaximum = max(self.matchedSequence)
+                        self.frequence = 1/(self.matchedSequenceTime[0] - self.matchedSequenceTime[-1])
+
+                        self.stwmDCandidateArray = []
+                        self.matchedSequenceCandidateArray = []
+                        self.matchedSequenceCandidateArrayTime = []
+
+                else:
+                    self.stwmDCandidateArray = self.stwmDCandidateArray[::-1]
+                    # local_min_index = len(self.stwmDCandidateArray) - 1 - self.stwmDCandidateArray.index(min(self.stwmDCandidateArray[::-1]))
+                    localMinIndex = self.stwmDCandidateArray.index(min(self.stwmDCandidateArray))
+                    self.matchedSequence = self.matchedSequenceCandidateArray[localMinIndex]
+                    self.matchedSequenceTime = self.matchedSequenceCandidateArrayTime[localMinIndex]
+
+                    self.count += 1
+                    self.localMinimun = min(self.matchedSequence)
+                    self.localMaximum = max(self.matchedSequence)
+                    self.frequence = 1 / (self.matchedSequenceTime[0] - self.matchedSequenceTime[-1])
+
+
+                    self.stwmDCandidateArray = []
+                    self.matchedSequenceCandidateArray = []
+                    self.matchedSequenceCandidateArrayTime = []
 
                 if getAdjacentSequence == True:
                     self.adjacentSequenceTime2.append(copy.copy(list(self.matchedSequenceTime[::-1])))
@@ -142,6 +164,9 @@ class Signal():
                     self.countSingleSequence += 1
 
 
+
+
+
             if D[-1, 1] > self.threshold:
                 self.stwmDCandidateArray = []
                 self.matchedSequenceCandidateArray = []
@@ -149,7 +174,7 @@ class Signal():
 
                 if getAdjacentSequence == True:
                     if len(self.matchedSequenceTime) != 0:
-                        if self.stTime > (self.matchedSequenceTime[0]+3*(self.matchedSequenceTime[0]-self.matchedSequenceTime[-1])):
+                        if self.stTime > (self.matchedSequenceTime[0]+4*(self.matchedSequenceTime[0]-self.matchedSequenceTime[-1])):
 
                             self.adjacentSequence2 = []
                             self.adjacentSequenceTime3 = []
@@ -175,6 +200,15 @@ class Signal():
         self.curve3 = self.p3.plot(pen=pen)
 
 
+    def setPlot4(self, title=None, pen="white"):
+        self.tempData4 = []
+        self.tempDataTime4 = []
+        self.p4 = win.addPlot(title=title)
+        self.curve4 = self.p4.plot(pen=pen)
+        self.curve4_1 = self.p4.plot(pen="red")
+        self.p4.setYRange(0.1*self.threshold,1.9*self.threshold)
+
+
     def updatePlot1(self):
         global N
         if N < self.presentSequenceLength:
@@ -188,14 +222,27 @@ class Signal():
     def updatePlot2(self):
         self.curve2.setData(x = self.matchedSequenceTime[::-1], y = self.matchedSequence[::-1])
 
+
     def updatePlot3(self):
         self.curve3.setData(x = self.adjacentSequenceTime, y = self.adjacentSequence)
 
 
-    def updateData(self,getAdjacentSequence = False):
+    def updatePlot4(self):
+        if N < self.presentSequenceLength:
+            self.tempDataTime4.append(self.stTime)
+            self.tempData4.append(self.stwmD[-1,0])
+            self.curve4.setData(x = self.tempDataTime4, y = self.tempData4)
+            self.curve4_1.setData(x = self.tempDataTime4,y = [self.threshold]*int(N/15+1))
+        else:
+            self.curve4.setData(x=self.presentSequenceTime[::-1], y=self.stwmD[-1][::-1])
+            self.curve4_1.setData(x = self.presentSequenceTime[::-1], y = [self.threshold]* self.presentSequenceLength)
+
+
+
+    def updateData(self,getAdjacentSequence = False,findSpritzermode = False):
         self.updateSequence()
         self.updateStwm()
-        self.getMatchedSequence(getAdjacentSequence=getAdjacentSequence)
+        self.getMatchedSequence(getAdjacentSequence=getAdjacentSequence, findSpritzermode = findSpritzermode)
 
 
 class Power():
@@ -290,49 +337,60 @@ def getCmtAndPluse(cmt,pulse):
                 globalFrequenz = 1/(cmtAndPulseSequenceTime[-1] - cmtAndPulseSequenceTime[0])
 
 
+def setEmptyPlot(title = None,pen = "white"):
+    global p
+    p = win.addPlot(title=title)
 
 def setPlot1(title = None,pen = "white"):
     global p1, curve1
     p1 = win.addPlot(title=title)
     curve1 = p1.plot(pen = pen)
 
-
 def updatePlot1():
     global curve1
     curve1.setData(x = cmtAndPulseSequenceTime , y = cmtAndPulseSequence)
 
 currentWithCmt = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_CMT.csv", downsample=2, threshold= 10000)
-CurrentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", downsample=2, threshold= 12000)
-voltageWithZuendfehler = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", downsample=2, threshold= 500)
-voltageWithSpritzer = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Spritzer5.csv", downsample=2, threshold= 200)
+CurrentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", downsample=2, threshold= 5000)
+voltageWithZuendfehler = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", downsample=2, threshold= 400)
+voltageWithSpritzer = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Spritzer02.csv", downsample=2, threshold= 1500)
+
+
 power = Power(currentWithCmt,voltageWithZuendfehler)
 
 
 app = pg.mkQApp("Spring Dashboard")
 win = pg.GraphicsLayoutWidget(show=True)
 win.setWindowTitle("Spring basic Dashboard")
-win.resize(1200,600)
+win.resize(1000,600)
 
 
 currentWithCmt.setPlot1("Strom Datastream",pen=(217,83,25))
 currentWithCmt.setPlot2("CMT")
 CurrentWithPuls.setPlot2("Puls(Single)")
+CurrentWithPuls.setPlot4("DTW distance")
+
+win.nextRow()
+
+setEmptyPlot()
 CurrentWithPuls.setPlot3("Puls-Phase")
 setPlot1("CMT+Pulse")
 
 win.nextRow()
 
 voltageWithZuendfehler.setPlot1("Spannung Datastream",pen=(0,114,189))
-voltageWithZuendfehler.setPlot2("Zündfehler")
+
 voltageWithSpritzer.setPlot2("Spritzer")
+voltageWithSpritzer.setPlot4("DTW distance Spritzer")
+voltageWithZuendfehler.setPlot2("Zündfehler")
 
 win.nextRow()
-
 power.setPlot1("Leistung Datastream",pen=(126,47,142))
 power.setPlot3("Energie",pen=(126,47,142))
+setEmptyPlot()
 
 qGraphicsGridLayout = win.ci.layout
-qGraphicsGridLayout.setColumnStretchFactor(0,3)
+qGraphicsGridLayout.setColumnStretchFactor(0,2)
 
 
 
@@ -341,7 +399,7 @@ def updateData():
     currentWithCmt.updateData()
     CurrentWithPuls.updateData(getAdjacentSequence = True)
     voltageWithZuendfehler.updateData()
-    voltageWithSpritzer.updateData()
+    voltageWithSpritzer.updateData(findSpritzermode = True)
     power.updateSequence(currentWithCmt,voltageWithZuendfehler)
     power.calculateEnergy()
     getCmtAndPluse(currentWithCmt,CurrentWithPuls)
@@ -354,11 +412,14 @@ def updateData():
         currentWithCmt.updatePlot2()
         CurrentWithPuls.updatePlot2()
         CurrentWithPuls.updatePlot3()
+        CurrentWithPuls.updatePlot4()
         updatePlot1()
 
         voltageWithZuendfehler.updatePlot1()
         voltageWithZuendfehler.updatePlot2()
         voltageWithSpritzer.updatePlot2()
+        voltageWithSpritzer.updatePlot4()
+
 
         power.updatePlot1()
         power.updatePlot3()
