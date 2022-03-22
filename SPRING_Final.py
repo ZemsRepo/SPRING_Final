@@ -60,9 +60,11 @@ class Signal():
     adjacentSequenceTime3 = []
     count = 0
     countSingleSequence = 0
-    localMaximum=None
-    localMinimun=None
-    frequence = None
+    localMaximum=0
+    localMinimum=0
+    frequency = 0
+    starttime = 0
+    endtime = 0
 
 
     def __init__(self, fullSequencePath = None, querySequencePath = None, downsample = 1,threshold = 1):
@@ -76,6 +78,10 @@ class Signal():
         self.presentSequenceLength = int(2000/downsample)
         self.presentSequence = np.zeros(self.presentSequenceLength)
         self.presentSequenceTime = np.zeros(self.presentSequenceLength)
+        self.presentSequenceCount = np.zeros(self.presentSequenceLength)
+        self.presentSequenceLocalMaxmum = np.zeros(self.presentSequenceLength)
+        self.presentSequenceLocalMinimum = np.zeros(self.presentSequenceLength)
+        self.presentSequenceFrequency = np.zeros(self.presentSequenceLength)
         self.stwmD = np.zeros([self.querySequenceLength,self.presentSequenceLength]);self.stwmD[:,0] = np.inf
         self.stwmI = np.zeros([self.querySequenceLength,self.presentSequenceLength])
         self.threshold = threshold
@@ -128,9 +134,12 @@ class Signal():
                         self.matchedSequenceTime = self.matchedSequenceCandidateArrayTime[localMinIndex]
 
                         self.count += 1
-                        self.localMinimun = min(self.matchedSequence)
+                        self.localMinimum = min(self.matchedSequence)
                         self.localMaximum = max(self.matchedSequence)
-                        self.frequence = 1/(self.matchedSequenceTime[0] - self.matchedSequenceTime[-1])
+                        self.frequency = 1/(self.matchedSequenceTime[0] - self.matchedSequenceTime[-1])
+                        self.starttime = self.matchedSequenceTime[-1]
+                        self.endtime = self.matchedSequenceTime[0]
+
 
                         self.stwmDCandidateArray = []
                         self.matchedSequenceCandidateArray = []
@@ -144,9 +153,11 @@ class Signal():
                     self.matchedSequenceTime = self.matchedSequenceCandidateArrayTime[localMinIndex]
 
                     self.count += 1
-                    self.localMinimun = min(self.matchedSequence)
+                    self.localMinimum = min(self.matchedSequence)
                     self.localMaximum = max(self.matchedSequence)
-                    self.frequence = 1 / (self.matchedSequenceTime[0] - self.matchedSequenceTime[-1])
+                    self.frequency = 1 / (self.matchedSequenceTime[0] - self.matchedSequenceTime[-1])
+                    self.starttime = self.matchedSequenceTime[-1]
+                    self.endtime = self.matchedSequenceTime[0]
 
 
                     self.stwmDCandidateArray = []
@@ -164,9 +175,6 @@ class Signal():
                     self.countSingleSequence += 1
 
 
-
-
-
             if D[-1, 1] > self.threshold:
                 self.stwmDCandidateArray = []
                 self.matchedSequenceCandidateArray = []
@@ -180,6 +188,20 @@ class Signal():
                             self.adjacentSequenceTime3 = []
                             self.adjacentSequenceTime2 = []
                             self.countSingleSequence = 0
+
+
+    def getMetrics(self):
+        self.presentSequenceCount[1:] = self.presentSequenceCount[:-1]
+        self.presentSequenceCount[0] = self.count
+
+        self.presentSequenceLocalMaxmum[1:] = self.presentSequenceLocalMaxmum[:-1]
+        self.presentSequenceLocalMaxmum[0] = self.localMaximum
+
+        self.presentSequenceLocalMinimum [1:] = self.presentSequenceLocalMinimum[:-1]
+        self.presentSequenceLocalMinimum [0] = self.localMinimum
+
+        self.presentSequenceFrequency[1:] = self.presentSequenceFrequency[:-1]
+        self.presentSequenceFrequency[0] = self.frequency
 
 
 
@@ -207,6 +229,48 @@ class Signal():
         self.curve4 = self.p4.plot(pen=pen)
         self.curve4_1 = self.p4.plot(pen="red")
         self.p4.setYRange(0.1*self.threshold,1.9*self.threshold)
+
+    def setPlot5(self,title = None,pen = "white"):
+        self.tempData5 = []
+        self.tempDataTime5 = []
+        self.p5 = win.addPlot(title=title)
+        self.curve5 = self.p5.plot(pen = pen)
+
+    def setPlot6(self,title = None,pen = "white"):
+        self.tempData6 = []
+        self.tempDataTime6 = []
+        self.p6 = win.addPlot(title=title)
+        self.curve6 = self.p6.plot(pen = pen)
+
+    def setPlot7(self,title = None,pen = "white"):
+        self.tempData7 = []
+        self.tempDataTime7 = []
+        self.p7 = win.addPlot(title=title)
+        self.curve7 = self.p7.plot(pen = pen)
+
+    def setPlot8(self,title = None,pen = "white"):
+        self.tempData8 = []
+        self.tempDataTime8 = []
+        self.p8 = win.addPlot(title=title)
+        self.curve8 = self.p8.plot(pen = pen)
+
+    def setText(self):
+        self.pText = win.addPlot()
+        self.pText.hideAxis("left")
+        self.pText.hideAxis("bottom")
+        self.pText.setXRange(0,50)
+        self.pText.setYRange(-100,0)
+        self.text = pg.TextItem(anchor=(0,0))
+        self.pText.addItem(self.text)
+
+    def updateText(self,unit):
+        self.text.setText(text=f"Anzahl: {self.count}\n"
+                               f"Startzeit: {self.starttime} s\n" 
+                               f"Endzeit: {self.endtime} s\n"
+                               f"Frequenz: {self.frequency} Hz\n"
+                               f"Lokaler Maximum: {self.localMaximum} {unit}\n"
+                               f"Lokaler Minimum: {self.localMinimum} {unit}\n")
+
 
 
     def updatePlot1(self):
@@ -237,12 +301,52 @@ class Signal():
             self.curve4.setData(x=self.presentSequenceTime[::-1], y=self.stwmD[-1][::-1])
             self.curve4_1.setData(x = self.presentSequenceTime[::-1], y = [self.threshold]* self.presentSequenceLength)
 
+    def updatePlot5(self):
+        global N
+        if N < self.presentSequenceLength:
+            self.tempDataTime5.append(self.stTime)
+            self.tempData5.append(self.count)
+            self.curve5.setData(x = self.tempDataTime5, y = self.tempData5)
+        else:
+            self.curve5.setData(x = self.presentSequenceTime[::-1], y = self.presentSequenceCount[::-1])
+
+    def updatePlot6(self):
+        global N
+        if N < self.presentSequenceLength:
+            self.tempDataTime6.append(self.stTime)
+            self.tempData6.append(self.localMaximum)
+            self.curve6.setData(x = self.tempDataTime6, y = self.tempData6)
+        else:
+            self.curve6.setData(x = self.presentSequenceTime[::-1], y = self.presentSequenceLocalMaxmum[::-1])
+
+    def updatePlot7(self):
+        global N
+        if N < self.presentSequenceLength:
+            self.tempDataTime7.append(self.stTime)
+            self.tempData7.append(self.localMinimum)
+            self.curve7.setData(x = self.tempDataTime7, y = self.tempData7)
+        else:
+            self.curve7.setData(x = self.presentSequenceTime[::-1], y = self.presentSequenceLocalMinimum[::-1])
+
+    def updatePlot8(self):
+        global N
+        if N < self.presentSequenceLength:
+            self.tempDataTime8.append(self.stTime)
+            self.tempData8.append(self.frequency)
+            self.curve8.setData(x = self.tempDataTime8, y = self.tempData8)
+        else:
+            self.curve8.setData(x = self.presentSequenceTime[::-1], y = self.presentSequenceFrequency[::-1])
+
+
 
 
     def updateData(self,getAdjacentSequence = False,findSpritzermode = False):
         self.updateSequence()
         self.updateStwm()
         self.getMatchedSequence(getAdjacentSequence=getAdjacentSequence, findSpritzermode = findSpritzermode)
+        self.getMetrics()
+
+
 
 
 class Power():
@@ -325,21 +429,17 @@ class Power():
 
 cmtAndPulseSequence = []
 cmtAndPulseSequenceTime = []
-globalFrequenz = 0
+globalFrequency = 0
 
 def getCmtAndPluse(cmt,pulse):
-    global cmtAndPulseSequence, cmtAndPulseSequenceTime, globalFrequenz
+    global cmtAndPulseSequence, cmtAndPulseSequenceTime, globalFrequency
     if len(cmt.matchedSequence) != 0:
         if len(pulse.adjacentSequence) != 0 and len(pulse.adjacentSequence2) == 0:
-            if abs(cmt.matchedSequenceTime[0]-pulse.adjacentSequenceTime[0]) < 1/pulse.frequence:
+            if abs(cmt.matchedSequenceTime[0]-pulse.adjacentSequenceTime[0]) < 1/pulse.frequency:
                 cmtAndPulseSequence = np.hstack((cmt.matchedSequence[::-1],pulse.adjacentSequence))
                 cmtAndPulseSequenceTime = np.hstack((cmt.matchedSequenceTime[::-1],pulse.adjacentSequenceTime))
-                globalFrequenz = 1/(cmtAndPulseSequenceTime[-1] - cmtAndPulseSequenceTime[0])
+                globalFrequency = 1/(cmtAndPulseSequenceTime[-1] - cmtAndPulseSequenceTime[0])
 
-
-def setEmptyPlot(title = None,pen = "white"):
-    global p
-    p = win.addPlot(title=title)
 
 def setPlot1(title = None,pen = "white"):
     global p1, curve1
@@ -351,7 +451,7 @@ def updatePlot1():
     curve1.setData(x = cmtAndPulseSequenceTime , y = cmtAndPulseSequence)
 
 currentWithCmt = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_CMT.csv", downsample=2, threshold= 10000)
-CurrentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", downsample=2, threshold= 5000)
+currentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySequencePath="V2BCurrent_Puls.csv", downsample=2, threshold= 5000)
 voltageWithZuendfehler = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", downsample=2, threshold= 400)
 voltageWithSpritzer = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Spritzer02.csv", downsample=2, threshold= 1500)
 
@@ -362,47 +462,68 @@ power = Power(currentWithCmt,voltageWithZuendfehler)
 app = pg.mkQApp("Spring Dashboard")
 win = pg.GraphicsLayoutWidget(show=True)
 win.setWindowTitle("Spring basic Dashboard")
-win.resize(1000,600)
+win.resize(1000,1000)
 
 
 currentWithCmt.setPlot1("Strom Datastream",pen=(217,83,25))
-currentWithCmt.setPlot2("CMT")
-CurrentWithPuls.setPlot2("Puls(Single)")
-CurrentWithPuls.setPlot4("DTW distance")
 
 win.nextRow()
+currentWithCmt.setPlot2("CMT-Phase")
+currentWithCmt.setPlot4("DTW distance CMT")
+currentWithCmt.setPlot5("Anzahl CMT")
+currentWithCmt.setText()
+# currentWithCmt.setPlot6("Localer Maximun CMT")
+# currentWithCmt.setPlot7("Localer Minimum CMT")
+# currentWithCmt.setPlot8("Frequenz CMT")
 
-setEmptyPlot()
-CurrentWithPuls.setPlot3("Puls-Phase")
+win.nextRow()
+currentWithPuls.setPlot2("Puls(Single)")
+currentWithPuls.setPlot4("DTW distance Puls")
+currentWithPuls.setPlot5("Anzahl Puls")
+currentWithPuls.setText()
+# currentWithPuls.setPlot6("Localer Maximun Puls")
+# currentWithPuls.setPlot7("Localer Minimum Puls")
+# currentWithPuls.setPlot8("Frequenz Puls")
+
+win.nextRow()
+currentWithPuls.setPlot3("Puls-Phase")
 setPlot1("CMT+Pulse")
 
 win.nextRow()
-
 voltageWithZuendfehler.setPlot1("Spannung Datastream",pen=(0,114,189))
 
+win.nextRow()
+voltageWithZuendfehler.setPlot2("Zündfehler")
+voltageWithZuendfehler.setPlot4("DTW distance Zündfehler")
+voltageWithZuendfehler.setPlot5("Anzahl Zündfehler")
+voltageWithZuendfehler.setText()
+
+win.nextRow()
 voltageWithSpritzer.setPlot2("Spritzer")
 voltageWithSpritzer.setPlot4("DTW distance Spritzer")
-voltageWithZuendfehler.setPlot2("Zündfehler")
+voltageWithSpritzer.setPlot5("Anzahl Spritzer")
+voltageWithSpritzer.setText()
 
 win.nextRow()
 power.setPlot1("Leistung Datastream",pen=(126,47,142))
 power.setPlot3("Energie",pen=(126,47,142))
-setEmptyPlot()
+
 
 qGraphicsGridLayout = win.ci.layout
-qGraphicsGridLayout.setColumnStretchFactor(0,2)
+qGraphicsGridLayout.setColumnStretchFactor(1,1)
+
 
 
 
 def updateData():
     global N
     currentWithCmt.updateData()
-    CurrentWithPuls.updateData(getAdjacentSequence = True)
+    currentWithPuls.updateData(getAdjacentSequence = True)
     voltageWithZuendfehler.updateData()
     voltageWithSpritzer.updateData(findSpritzermode = True)
     power.updateSequence(currentWithCmt,voltageWithZuendfehler)
     power.calculateEnergy()
-    getCmtAndPluse(currentWithCmt,CurrentWithPuls)
+    getCmtAndPluse(currentWithCmt,currentWithPuls)
 
 
 
@@ -410,15 +531,34 @@ def updateData():
 
         currentWithCmt.updatePlot1()
         currentWithCmt.updatePlot2()
-        CurrentWithPuls.updatePlot2()
-        CurrentWithPuls.updatePlot3()
-        CurrentWithPuls.updatePlot4()
+
+        currentWithCmt.updatePlot4()
+        currentWithCmt.updatePlot5()
+        currentWithCmt.updateText(unit="A")
+        # currentWithCmt.updatePlot6()
+        # currentWithCmt.updatePlot7()
+        # currentWithCmt.updatePlot8()
+
+        currentWithPuls.updatePlot2()
+        currentWithPuls.updatePlot3()
+        currentWithPuls.updateText(unit = "A")
+        currentWithPuls.updatePlot4()
+        currentWithPuls.updatePlot5()
+        # currentWithPuls.updatePlot6()
+        # currentWithPuls.updatePlot7()
+        # currentWithPuls.updatePlot8()
         updatePlot1()
 
         voltageWithZuendfehler.updatePlot1()
         voltageWithZuendfehler.updatePlot2()
+        voltageWithZuendfehler.updatePlot4()
+        voltageWithZuendfehler.updatePlot5()
+        voltageWithZuendfehler.updateText(unit="V")
+
         voltageWithSpritzer.updatePlot2()
         voltageWithSpritzer.updatePlot4()
+        voltageWithSpritzer.updatePlot5()
+        voltageWithSpritzer.updateText(unit="V")
 
 
         power.updatePlot1()
