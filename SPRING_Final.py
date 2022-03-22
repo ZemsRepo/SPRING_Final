@@ -58,6 +58,7 @@ class Signal():
     adjacentSequenceTime = []
     adjacentSequenceTime2 = []
     adjacentSequenceTime3 = []
+    energy = 0
     count = 0
     countSingleSequence = 0
     localMaximum=0
@@ -65,6 +66,7 @@ class Signal():
     frequency = 0
     starttime = 0
     endtime = 0
+    localFrequency = 0
 
 
     def __init__(self, fullSequencePath = None, querySequencePath = None, downsample = 1,threshold = 1):
@@ -140,6 +142,11 @@ class Signal():
                         self.starttime = self.matchedSequenceTime[-1]
                         self.endtime = self.matchedSequenceTime[0]
 
+                        index3 = int(np.argwhere(self.presentSequenceTime == self.matchedSequenceTime[-1]))
+                        index4 = int(np.argwhere(self.presentSequenceTime == self.matchedSequenceTime[0]))
+
+                        self.energy = power.presentSequenceEnergySum[index4] - power.presentSequenceEnergySum[index3]
+
 
                         self.stwmDCandidateArray = []
                         self.matchedSequenceCandidateArray = []
@@ -158,6 +165,11 @@ class Signal():
                     self.frequency = 1 / (self.matchedSequenceTime[0] - self.matchedSequenceTime[-1])
                     self.starttime = self.matchedSequenceTime[-1]
                     self.endtime = self.matchedSequenceTime[0]
+
+                    index3 = int(np.argwhere(self.presentSequenceTime == self.matchedSequenceTime[-1]))
+                    index4 = int(np.argwhere(self.presentSequenceTime == self.matchedSequenceTime[0]))
+
+                    self.energy = power.presentSequenceEnergySum[index4]-power.presentSequenceEnergySum[index3]
 
 
                     self.stwmDCandidateArray = []
@@ -183,7 +195,7 @@ class Signal():
                 if getAdjacentSequence == True:
                     if len(self.matchedSequenceTime) != 0:
                         if self.stTime > (self.matchedSequenceTime[0]+4*(self.matchedSequenceTime[0]-self.matchedSequenceTime[-1])):
-
+                            self.localFrequency =1/(self.adjacentSequenceTime[-1]-self.adjacentSequenceTime[0])
                             self.adjacentSequence2 = []
                             self.adjacentSequenceTime3 = []
                             self.adjacentSequenceTime2 = []
@@ -269,7 +281,22 @@ class Signal():
                                f"Endzeit: {self.endtime} s\n"
                                f"Frequenz: {self.frequency} Hz\n"
                                f"Lokaler Maximum: {self.localMaximum} {unit}\n"
-                               f"Lokaler Minimum: {self.localMinimum} {unit}\n")
+                               f"Lokaler Minimum: {self.localMinimum} {unit}\n"
+                               f"Energie: {self.energy} J")
+
+    def setText2(self):
+        self.pText2 = win.addPlot()
+        self.pText2.hideAxis("left")
+        self.pText2.hideAxis("bottom")
+        self.pText2.setXRange(0,50)
+        self.pText2.setYRange(-100,0)
+        self.text2 = pg.TextItem(anchor=(0,0))
+        self.pText2.addItem(self.text2)
+
+    def updateText2(self):
+        self.text2.setText(text=f"Globale Frequenz: {globalFrequency} Hz\n"
+                               f"Lokale Frequenz: {self.localFrequency} Hz\n"
+                               f"Pulseanzahl in Puls-Phase: {self.countSingleSequence}")
 
 
 
@@ -455,7 +482,6 @@ currentWithPuls = Signal(fullSequencePath="V2B_Current_Segment1.csv", querySeque
 voltageWithZuendfehler = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Zuendfehler.csv", downsample=2, threshold= 400)
 voltageWithSpritzer = Signal(fullSequencePath="V2B_Voltage_Segment1.csv", querySequencePath="V2BVoltage_Spritzer02.csv", downsample=2, threshold= 1500)
 
-
 power = Power(currentWithCmt,voltageWithZuendfehler)
 
 
@@ -488,6 +514,7 @@ currentWithPuls.setText()
 win.nextRow()
 currentWithPuls.setPlot3("Puls-Phase")
 setPlot1("CMT+Pulse")
+currentWithPuls.setText2()
 
 win.nextRow()
 voltageWithZuendfehler.setPlot1("Spannung Datastream",pen=(0,114,189))
@@ -508,9 +535,6 @@ win.nextRow()
 power.setPlot1("Leistung Datastream",pen=(126,47,142))
 power.setPlot3("Energie",pen=(126,47,142))
 
-
-qGraphicsGridLayout = win.ci.layout
-qGraphicsGridLayout.setColumnStretchFactor(1,1)
 
 
 
@@ -548,6 +572,7 @@ def updateData():
         # currentWithPuls.updatePlot7()
         # currentWithPuls.updatePlot8()
         updatePlot1()
+        currentWithPuls.updateText2()
 
         voltageWithZuendfehler.updatePlot1()
         voltageWithZuendfehler.updatePlot2()
